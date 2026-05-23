@@ -88,13 +88,41 @@ jobs:
         }
 
     - name: Publish Test Results
-      uses: dorny/test-reporter@v1
       if: always()
-      with:
-        name: 'Unit Tests'
-        path: 'TestResults/*.trx'
-        reporter: 'dotnet-trx'
-        fail-on-empty: 'false'
+      run: |
+        # Parse TRX file and create GitHub Actions job summary
+        $trxFiles = Get-ChildItem "TestResults\*.trx" -ErrorAction SilentlyContinue
+        if ($trxFiles) {
+          foreach ($trx in $trxFiles) {
+            [xml]$xml = Get-Content $trx.FullName
+            $counters = $xml.TestRun.ResultSummary.Counters
+            $total = $counters.total
+            $passed = $counters.passed
+            $failed = $counters.failed
+            
+            $summary = "## Unit Test Results`n`n"
+            $summary += "| Metric | Count |`n|--------|-------|`n"
+            $summary += "| Total | $total |`n"
+            $summary += "| ✅ Passed | $passed |`n"
+            $summary += "| ❌ Failed | $failed |`n`n"
+            
+            if ([int]$failed -gt 0) {
+              $summary += "### Failed Tests`n"
+              $results = $xml.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq "Failed" }
+              foreach ($r in $results) {
+                $summary += "- **$($r.testName)**: $($r.Output.ErrorInfo.Message)`n"
+              }
+            }
+            
+            $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            Write-Host "Tests: $passed passed, $failed failed, $total total"
+            
+            if ([int]$failed -gt 0) { exit 1 }
+          }
+        } else {
+          Write-Host "No TRX files found"
+          "## ⚠️ No test results found" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+        }
 
     - name: Upload Test Results
       uses: actions/upload-artifact@v4
