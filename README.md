@@ -1,315 +1,306 @@
-# .NET nanoFramework ESP32 Development Environment
+# ESP32-S3 WiFi Server + HTTP Server + Messaging
 
-> **Status**: ✅ Fully installed and configured following official setup from https://nanoframework.net/
+[![CI Build and Test](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml)
 
-This repository contains a complete setup for developing .NET nanoFramework applications on ESP32 microcontrollers.
+A complete embedded IoT application built with [.NET nanoFramework](https://nanoframework.net/) for the **Seeed Studio XIAO ESP32-S3**. The device runs as a standalone WiFi access point with an HTTP web server and LED control — no router or internet connection required.
 
-## What is .NET nanoFramework?
+**Connect your phone -> open the web page -> tap the button -> the LED blinks.**
 
-.NET nanoFramework is a free and open-source platform that enables C# developers to write embedded applications for microcontrollers (MCUs). It provides:
+---
 
-- **Full C# Support**: Write embedded code using the C# language you know
-- **Visual Studio Integration**: Use Visual Studio IDE with live debugging
-- **Rich Library Support**: GPIO, I2C, SPI, PWM, ADC, DAC, Networking, etc.
-- **Cloud Connectivity**: Azure IoT, AWS IoT support
-- **Multiple Hardware Platforms**: ESP32, STM32, Raspberry Pi Pico, and more
+## Architecture Overview
 
-## System Status ✅
+The application uses a message-driven architecture with three independent background workers communicating through a publish/subscribe message bus.
 
-| Component | Status | Version |
-|-----------|--------|---------|
-| .NET SDK | ✅ Installed | 10.0.300-preview.0.26177.108 |
-| .NET 3.1 Runtime | ✅ Installed | 3.1.32 |
-| nanoff Tool | ✅ Installed | 2.5.144 |
-| ESP32 Support | ✅ Available | Multiple targets available |
-| COM Port | ✅ Detected | COM3 |
+![Logical Structure](docs/diagrams/logical-structure.png)
 
-## Quick Start
+### Components
 
-### 1. List Available Devices
+| Component | Responsibility |
+|-----------|---------------|
+| **WifiApWorker** | Configures ESP32-S3 as a WiFi access point (SoftAP), assigns IPs via DHCP |
+| **WebServerWorker** | HTTP server on port 80 — serves the web UI and REST API |
+| **LedWorker** | Subscribes to `led/flash` messages, controls the onboard LED via GPIO |
+| **MessageBus** | Thread-safe pub/sub broker routing messages between workers |
+| **GpioLedController** | Hardware abstraction layer for GPIO pin 21 (onboard LED) |
 
-```powershell
-# PowerShell
-.\setup.ps1 -ListDevices
+---
 
-# Or directly
-nanoff --listports                                    # List COM ports
-nanoff --listtargets --platform esp32                # List ESP32 targets
+## Physical Deployment
+
+![Physical Runtime](docs/diagrams/physical-runtime.png)
+
+### Hardware
+
+- **Board**: Seeed Studio XIAO ESP32-S3
+- **MCU**: ESP32-S3 (QFN56) with integrated WiFi/BLE
+- **Flash**: 8 MB
+- **PSRAM**: 8 MB
+- **LED**: Onboard yellow LED on GPIO pin 21
+- **WiFi**: 802.11n 2.4 GHz (SoftAP mode)
+
+### Runtime Stack
+
+```
++----------------------------------+
+|  NanoFrameworkApp (C# managed)   |
++----------------------------------+
+|  nanoFramework CLR v1.16.0       |
++----------------------------------+
+|  ESP-IDF v5.5.4 (native)        |
++----------------------------------+
+|  ESP32-S3 Hardware               |
++----------------------------------+
 ```
 
-### 2. Flash Firmware to ESP32
+---
+
+## Message Flow
+
+When a user taps the "Flash LED" button in their browser, this is the message flow through the system:
+
+![Message Flow](docs/diagrams/message-flow.png)
+
+### Detailed Sequence
+
+![Message Flow Sequence](docs/diagrams/message-flow-sequence.png)
+
+The flow is:
+1. Browser sends `POST /api/led/flash` to the WebServerWorker
+2. WebServerWorker publishes a `Message("led/flash", "3")` to the MessageBus
+3. MessageBus looks up subscribers for the `led/flash` topic
+4. LedWorker's callback is invoked with the message
+5. LedWorker parses the payload (number of flashes) and drives GPIO pin 21
+
+---
+
+## End-to-End Usage
+
+![Usage Sequence](docs/diagrams/usage-sequence.png)
+
+### Quick Start (Using the Device)
+
+1. **Power on** the ESP32-S3 (USB-C cable)
+2. **Wait 5 seconds** — the LED blinks 3 times to signal startup
+3. **Connect to WiFi** from your phone or laptop:
+   - **SSID**: `NanoFramework-ESP32S3`
+   - **Password**: (none — open network)
+4. **Open browser**: http://192.168.4.1
+5. **Tap "Flash LED"** — the onboard LED blinks 3 times
+
+### REST API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | HTML page with Flash LED button |
+| `/api/led/flash` | POST | Triggers LED to flash 3 times |
+| `/api/status` | GET | Returns `OK` if server is running |
+
+---
+
+## DevOps and CI/CD
+
+![DevOps Architecture](docs/diagrams/devops-architecture.png)
+
+### GitHub Actions Pipeline
+
+Every push and pull request triggers the CI workflow (`.github/workflows/ci.yml`):
+
+1. **Setup** — .NET SDK 3.1 + 10.0, nanoCLR simulator, NuGet CLI
+2. **Restore** — NuGet packages for nanoFramework projects
+3. **Build App** — MSBuild compiles `.nfproj` to PE assemblies
+4. **Build Tests** — Compiles the unit test project
+5. **Run Tests** — Executes 18 unit tests on the nanoCLR WIN32 simulator
+6. **Publish Results** — TRX test results parsed into GitHub Actions job summary
+7. **Package** — Combines all PE files into `deployment.bin` (ready to flash)
+8. **Artifacts** — Uploads `deployment.bin` and test results
+
+### Branch Protection
+
+- **Required status check**: `build-and-test` must pass before merge
+- **Pull request required**: Direct pushes to `master` are blocked
+- Failed builds display a red X on the PR and prevent merging
+
+### Test Results
+
+Unit tests run on the nanoCLR simulator (no hardware needed) and results are published as a job summary:
+
+| Suite | Tests |
+|-------|-------|
+| MessageTests | 3 |
+| MessageBusTests | 7 |
+| LedWorkerTests | 5 |
+| WebServerWorkerTests | 3 |
+| **Total** | **18** |
+
+---
+
+## Building from Source
+
+### Prerequisites
+
+- Windows 10/11
+- [.NET SDK 10.0](https://dot.net/download) (or 8.0+)
+- [.NET 3.1 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/3.1) (required by nanoff)
+- Visual Studio 2022+ with MSBuild, or standalone [Build Tools](https://visualstudio.microsoft.com/downloads/)
+
+### Build
 
 ```powershell
-# Generic ESP32 (replace COM3 with your port)
-nanoff --platform esp32 --serialport COM3 --update
+# Full build + test pipeline
+.\build.ps1
 
-# Or specific board
-nanoff --target XIAO_ESP32C3 --serialport COM3 --update
+# Or manually:
+nuget restore src\NanoFrameworkApp\packages.config -PackagesDirectory src\packages
+nuget restore src\NanoFrameworkApp.Tests\packages.config -PackagesDirectory src\packages
+msbuild src\NanoFrameworkApp\NanoFrameworkApp.nfproj /p:Configuration=Release
+msbuild src\NanoFrameworkApp.Tests\NanoFrameworkApp.Tests.nfproj /p:Configuration=Release
 ```
 
-**Wait for completion** - You should see "Successfully flashed firmware to device"
-
-### 3. Verify Connection
+### Run Unit Tests Locally
 
 ```powershell
-nanoff --listdevices
+# Install nanoCLR simulator
+dotnet tool install -g nanoclr
+
+# Run tests via vstest
+vstest.console.exe src\NanoFrameworkApp.Tests\bin\Release\NFUnitTest.dll `
+    /TestAdapterPath:src\NanoFrameworkApp.Tests\bin\Release `
+    /Settings:src\nano.runsettings
 ```
 
-### 4. Create & Deploy Application
+---
 
-**Option A: Visual Studio (Recommended)**
-1. Install Visual Studio 2022
-2. Install nanoFramework extension: Extensions > Manage Extensions > Search "nanoFramework"
-3. Create new project: File > New > Project > "Blank Application (nanoFramework)"
-4. Add GPIO package: Manage NuGet Packages > Search "nanoFramework.System.Device.Gpio"
-5. Press F5 to build, deploy, and debug
+## Deploying to the ESP32-S3
 
-**Option B: Command Line**
+### Prerequisites
+
 ```powershell
-cd src/NanoFrameworkApp
-dotnet build
-# Deploy via Visual Studio Device Explorer
+# Install the nanoFramework flasher tool
+dotnet tool install -g nanoff
 ```
+
+### Flash Firmware + Deploy App
+
+```powershell
+# Automated deployment (detects COM port, flashes firmware + app)
+.\deploy.ps1
+
+# Or manually:
+# 1. Put device in bootloader mode: Hold BOOT, press RESET, release both
+# 2. Flash nanoFramework firmware
+nanoff --target ESP32_S3_BLE --serialport COM3 --update
+
+# 3. After reboot, deploy the application
+nanoff --nanodevice --serialport COM4 --deploy --image publish\deployment.bin
+```
+
+### Bootloader Mode (Seeed XIAO ESP32-S3)
+
+1. Hold the **BOOT** button (marked "B")
+2. While holding, press and release the **RESET** button (marked "R")
+3. Release the **BOOT** button
+4. The device is now in bootloader mode (COM port may change)
+
+### Verify Deployment
+
+```powershell
+# Check device is running nanoFramework and app is loaded
+nanoff --nanodevice --serialport COM4 --devicedetails
+```
+
+You should see all 13 assemblies listed including `NanoFrameworkApp, 1.0.0.0`.
+
+---
 
 ## Project Structure
 
 ```
-D:\esp32-seed-nano-framework/
-├── src/
-│   └── NanoFrameworkApp/           # Sample Blinky application
-├── firmware/                        # Firmware files (downloaded by nanoff)
-├── tools/                          # Utility scripts
-├── SETUP_GUIDE.md                  # Complete setup instructions
-├── QUICK_START.md                  # Quick reference
-├── setup.ps1                       # PowerShell setup script
-├── setup.bat                       # Batch setup script
-└── README.md                       # This file
+.
++-- .github/workflows/ci.yml        # GitHub Actions CI pipeline
++-- build.ps1                        # Local build + test script
++-- deploy.ps1                       # Device flash + deploy script
++-- docs/diagrams/                   # Architecture diagrams (PlantUML + PNG)
+|   +-- physical-runtime.puml
+|   +-- logical-structure.puml
+|   +-- message-flow.puml
+|   +-- message-flow-sequence.puml
+|   +-- usage-sequence.puml
+|   +-- devops-architecture.puml
++-- src/
+|   +-- NanoFrameworkApp/              # Main embedded application
+|   |   +-- Program.cs                # Entry point, worker orchestration
+|   |   +-- Messaging/
+|   |   |   +-- Message.cs            # Topic + Payload DTO
+|   |   |   +-- MessageBus.cs         # Thread-safe pub/sub
+|   |   +-- Workers/
+|   |   |   +-- IWorker.cs            # Worker interface
+|   |   |   +-- WifiApWorker.cs       # SoftAP + DHCP
+|   |   |   +-- WebServerWorker.cs    # HTTP server + UI
+|   |   |   +-- LedWorker.cs          # LED flash controller
+|   |   +-- Hardware/
+|   |   |   +-- ILedController.cs     # LED abstraction
+|   |   |   +-- GpioLedController.cs  # GPIO implementation
+|   |   +-- NanoFrameworkApp.nfproj   # nanoFramework project file
+|   |   +-- packages.config           # NuGet dependencies
+|   +-- NanoFrameworkApp.Tests/        # Unit tests (nanoCLR)
+|   |   +-- MessageTests.cs
+|   |   +-- MessageBusTests.cs
+|   |   +-- LedWorkerTests.cs
+|   |   +-- WebServerWorkerTests.cs
+|   |   +-- Hardware/FakeLedController.cs
+|   +-- NanoFrameworkApp.IntegrationTests/  # Device integration tests
+|   +-- NanoFrameworkApp.LocalRunner/       # Desktop simulation + Playwright
++-- tools/nanoFramework/v1.0/          # MSBuild targets
++-- publish/                           # Build output (deployment.bin)
 ```
-
-## Available Tools & Commands
-
-### PowerShell Setup Script
-
-```powershell
-# Show help and available devices
-.\setup.ps1 -ListDevices
-
-# Flash firmware to specific COM port
-.\setup.ps1 -ComPort COM3
-
-# Install missing tools
-.\setup.ps1 -InstallTools
-```
-
-### nanoff Commands
-
-```powershell
-# Firmware flashing
-nanoff --platform esp32 --serialport COM3 --update          # Generic ESP32
-nanoff --target XIAO_ESP32C3 --serialport COM3 --update     # Specific board
-nanoff --platform esp32 --serialport COM3 --masserase --update  # With full erase
-
-# Device information
-nanoff --listports                                          # List COM ports
-nanoff --listdevices                                        # List connected devices
-nanoff --listtargets --platform esp32                       # List available targets
-nanoff --devicedetails --platform esp32                     # Get device details
-
-# Maintenance
-nanoff --clearcache                                         # Clear cached firmware
-nanoff --help                                              # Show all options
-nanoff --version                                           # Show version
-```
-
-## Sample Application: LED Blinky
-
-The `src/NanoFrameworkApp/` folder contains a basic blinky example:
-
-```csharp
-using System;
-using System.Device.Gpio;
-using System.Threading;
-
-class Program
-{
-    const int LED_PIN = 2;  // GPIO 2 (change for your board)
-
-    static void Main()
-    {
-        using (var gpio = new GpioController())
-        {
-            gpio.OpenPin(LED_PIN, PinMode.Output);
-            
-            while (true)
-            {
-                gpio.Write(LED_PIN, PinValue.High);
-                Thread.Sleep(1000);
-                gpio.Write(LED_PIN, PinValue.Low);
-                Thread.Sleep(1000);
-            }
-        }
-    }
-}
-```
-
-**To deploy:**
-1. Adjust `LED_PIN` for your board (common ESP32 pins: 2, 4, 5, 12-19, 21-27)
-2. Open in Visual Studio or build with `dotnet build`
-3. Deploy with Visual Studio Device Explorer or F5
-4. Watch your LED blink!
-
-## ESP32 GPIO Pin Reference
-
-### Common GPIO Pins (Available on most ESP32 boards)
-- GPIO 2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27
-
-### Pins to Avoid
-- GPIO 0: Boot mode (HIGH for normal boot, LOW for download)
-- GPIO 1, 3: UART0 (Serial console)
-- GPIO 6-11: SPI flash (internal use)
-
-**Refer to your specific board's pinout diagram**
-
-## Available Packages (NuGet)
-
-The most common nanoFramework packages:
-
-```xml
-<!-- GPIO support -->
-<PackageReference Include="nanoFramework.System.Device.Gpio" />
-
-<!-- I2C communication -->
-<PackageReference Include="nanoFramework.System.Device.I2c" />
-
-<!-- SPI communication -->
-<PackageReference Include="nanoFramework.System.Device.Spi" />
-
-<!-- PWM support -->
-<PackageReference Include="nanoFramework.System.Device.Pwm" />
-
-<!-- ADC support -->
-<PackageReference Include="nanoFramework.System.Device.Adc" />
-
-<!-- Serial ports -->
-<PackageReference Include="nanoFramework.System.IO.Ports" />
-
-<!-- Networking -->
-<PackageReference Include="nanoFramework.System.Net.Http" />
-
-<!-- Azure IoT Hub -->
-<PackageReference Include="nanoFramework.Azure.Devices" />
-
-<!-- 100+ IoT Device samples -->
-<PackageReference Include="nanoFramework.IoT.Device" />
-```
-
-## Troubleshooting
-
-### Device not detected
-```powershell
-# Verify COM port
-nanoff --listports
-
-# Check if in Device Manager under Ports (COM & LPT)
-# Update drivers from manufacturer or Windows Update
-```
-
-### Firmware flash fails
-```powershell
-# Try with mass erase
-nanoff --platform esp32 --serialport COM3 --masserase --update
-
-# Clear cache and retry
-nanoff --clearcache
-nanoff --platform esp32 --serialport COM3 --update
-```
-
-### Visual Studio Device Explorer not showing device
-1. Build the project first (Build > Build Solution)
-2. Open Device Explorer: View > Other Windows > Device Explorer
-3. Click "Ping" on device to verify connection
-4. Check USB driver installation
-
-### Build fails - missing packages
-```powershell
-# Clear NuGet cache
-dotnet nuget locals all --clear
-
-# Restore packages
-dotnet restore
-```
-
-## Learning Resources
-
-### Official Documentation
-- **Homepage**: https://nanoframework.net/
-- **Documentation**: https://docs.nanoframework.net/
-- **API Reference**: https://docs.nanoframework.net/api/
-- **Samples**: https://github.com/nanoframework/Samples
-
-### Community
-- **Discord**: https://discordapp.com/invite/gCyBu8T
-- **GitHub**: https://github.com/nanoframework/
-- **Discussions**: https://github.com/nanoframework/Home/discussions
-
-### Learning Paths
-1. **Beginner**: GPIO, LED blinking, button input
-2. **Intermediate**: I2C sensors, ADC, PWM motors
-3. **Advanced**: Networking, cloud connectivity, multi-threaded apps
-4. **Professional**: Production-grade firmware, OTA updates
-
-## Next Steps
-
-1. ✅ **Environment Setup** (Completed)
-2. **Flash Firmware**: `nanoff --platform esp32 --serialport COM3 --update`
-3. **Install Visual Studio Extension** (Optional)
-4. **Create First Project**: Use sample or create new
-5. **Deploy & Debug**: Press F5 or right-click > Deploy
-6. **Explore Samples**: Check GPIO, I2C, sensors
-7. **Join Community**: Discord for help and ideas
-
-## Tips & Tricks
-
-### Identifying Your ESP32
-- Check Device Manager for USB device name
-- Look up board model in manufacturer documentation
-- Different boards use different pin layouts
-
-### Backup Before Flashing
-```powershell
-nanoff --platform esp32 --serialport COM3 --backupfile "esp32_backup.bin"
-```
-
-### Download Specific Firmware Version
-```powershell
-nanoff --platform esp32 --serialport COM3 --fwversion 1.16.0.602 --update
-```
-
-### List Specific Target Details
-```powershell
-nanoff --listtargets --platform esp32 | findstr "XIAO"
-```
-
-## Support
-
-**Getting Help:**
-1. Check official documentation: https://docs.nanoframework.net/
-2. Search GitHub issues: https://github.com/nanoframework/
-3. Join Discord community: https://discordapp.com/invite/gCyBu8T
-4. Ask in community discussions
-
-## License
-
-.NET nanoFramework is licensed under MIT.
-Sample code in this repository is also MIT licensed.
 
 ---
 
-**Last Updated**: May 2024  
-**Version**: nanoFramework 2.5.144 + nanoff 2.5.144
+## NuGet Dependencies
 
+| Package | Version | Purpose |
+|---------|---------|---------|
+| nanoFramework.CoreLibrary | 1.17.11 | Base runtime (mscorlib) |
+| System.Device.Gpio | 1.1.57 | GPIO pin control (LED) |
+| System.Device.Wifi | 1.5.141 | WiFi SoftAP configuration |
+| System.Net | 1.11.50 | Network stack |
+| System.Net.Http.Server | 1.5.206 | HttpListener (web server) |
+| Iot.Device.DhcpServer | 1.2.949 | DHCP for connected clients |
+| System.Collections | 1.5.67 | ArrayList/Hashtable |
+| System.Text | 1.3.42 | UTF8 encoding |
+| System.Threading | 1.1.52 | Thread management |
+| System.IO.Streams | 1.1.96 | Stream operations |
+| Runtime.Events | 1.11.32 | Event infrastructure |
+| Runtime.Native | 1.7.11 | Native interop |
+| TestFramework | 3.0.80 | Unit test framework |
 
-## Build Status
+---
 
-[![CI Build and Test](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml)
+## Key Design Decisions
 
+- **No generics** — nanoFramework does not support `List<T>` or `Dictionary<K,V>`. Uses `ArrayList` and `Hashtable`.
+- **No async/await** — Uses `Thread` and `ManualResetEvent` for concurrency.
+- **Hardware abstraction** — `ILedController` interface allows unit testing without GPIO hardware.
+- **Self-contained tests** — nanoCLR invokes test methods statically; tests create all dependencies locally.
+- **Linked source files** — Test project includes source via file links (not ProjectReference) to avoid PE conflicts in nanoCLR.
+- **Auto-reboot on first config** — WiFi AP requires a reboot after initial configuration; the app saves config and calls `Power.RebootDevice()` on first run, then starts normally on second boot.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| WiFi AP not appearing | Press RESET button on the board, wait 10 seconds |
+| COM port not found | Check Device Manager; port changes between bootloader (COM3) and normal mode (COM4) |
+| Flash timeout on last block | Usually harmless — the data is already written. Press RESET. |
+| 404 on web page | Web server may not have started yet — wait 5-10 seconds after boot |
+| Build fails locally | Ensure MSBuild 17+ is available and `tools\nanoFramework\v1.0\` exists |
+| Tests fail with "assembly not found" | Run `nuget restore` on both packages.config files |
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for details.
