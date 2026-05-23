@@ -69,9 +69,9 @@ jobs:
       run: |
         $testDir = "src\NanoFrameworkApp.Tests\bin\Release"
         
-        # Copy test adapter DLLs from NuGet package
+        # Copy ALL test adapter DLLs from NuGet package (adapter + dependencies)
         $adapterSource = "tools\test-adapter\nanoFramework.TestFramework.3.0.80\lib\net48"
-        Copy-Item "$adapterSource\nanoFramework.TestAdapter.dll" $testDir -Force
+        Copy-Item "$adapterSource\*" $testDir -Force
         
         # Copy UnitTestLauncher (it's an exe in lib\, not lib\net48\)
         $launcherSource = "tools\test-adapter\nanoFramework.TestFramework.3.0.80\lib"
