@@ -1,0 +1,40 @@
+@startuml physical-runtime
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+title Physical Runtime Diagram - ESP32-S3 nanoFramework Application
+
+Deployment_Node(dev, "Developer Machine", "Windows 11") {
+    Deployment_Node(vs, "Visual Studio / MSBuild", "Build Tools") {
+        Container(build, "build.ps1", "PowerShell", "Compiles .nfproj, runs unit tests, produces deployment.bin")
+    }
+    Deployment_Node(nanoff_tool, "nanoff CLI", ".NET Tool") {
+        Container(flasher, "Firmware Flasher", "nanoff 2.5.144", "Flashes firmware and deploys app via USB serial")
+    }
+}
+
+Deployment_Node(esp32, "Seeed Studio XIAO ESP32-S3", "ESP32-S3 QFN56, 8MB Flash, 8MB PSRAM") {
+    Deployment_Node(clr, "nanoFramework CLR", "nanoCLR v1.16.0.602") {
+        Container(wifi_ap, "WifiApWorker", "SoftAP", "Broadcasts SSID, assigns IPs via DHCP")
+        Container(web_srv, "WebServerWorker", "HttpListener:80", "Serves HTML page and REST API")
+        Container(led_ctrl, "LedWorker", "GPIO 21", "Flashes onboard LED on message")
+        Container(msg_bus, "MessageBus", "Pub/Sub", "Routes messages between workers")
+    }
+    Deployment_Node(hw, "Hardware Peripherals") {
+        Container(led_hw, "Onboard LED", "GPIO Pin 21", "Yellow LED")
+        Container(wifi_hw, "WiFi Radio", "802.11n 2.4GHz", "ESP32-S3 integrated radio")
+    }
+}
+
+Deployment_Node(client, "Client Device", "Phone / Laptop") {
+    Container(browser, "Web Browser", "Safari / Chrome", "Connects to WiFi AP, loads web page")
+}
+
+Rel(flasher, clr, "USB Serial", "COM4 @ 115200 baud")
+Rel(browser, wifi_hw, "WiFi", "192.168.4.1:80")
+Rel(wifi_hw, wifi_ap, "Network Stack")
+Rel(web_srv, msg_bus, "Publish")
+Rel(msg_bus, led_ctrl, "Subscribe")
+Rel(led_ctrl, led_hw, "GPIO Write")
+
+SHOW_LEGEND()
+@enduml

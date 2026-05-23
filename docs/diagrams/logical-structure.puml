@@ -1,0 +1,39 @@
+@startuml logical-structure
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Logical Structure Diagram - nanoFramework ESP32-S3 Application
+
+Container_Boundary(app, "NanoFrameworkApp") {
+
+    Component(program, "Program", "Entry Point", "Initializes all workers and wires dependencies")
+
+    Boundary(workers, "Workers Layer") {
+        Component(wifi_worker, "WifiApWorker", "IWorker", "Configures SoftAP, static IP, DHCP server")
+        Component(web_worker, "WebServerWorker", "IWorker", "HTTP listener on port 80, serves UI and API")
+        Component(led_worker, "LedWorker", "IWorker", "Subscribes to led/flash topic, controls LED")
+    }
+
+    Boundary(messaging, "Messaging Layer") {
+        Component(msg_bus, "MessageBus", "Pub/Sub", "Thread-safe publish/subscribe with topic routing")
+        Component(message, "Message", "DTO", "Topic + Payload carrier")
+    }
+
+    Boundary(hardware, "Hardware Abstraction Layer") {
+        Component(iled, "ILedController", "Interface", "TurnOn(), TurnOff(), IsOn")
+        Component(gpio_led, "GpioLedController", "Implementation", "GPIO pin control via System.Device.Gpio")
+    }
+}
+
+Rel(program, wifi_worker, "Creates & Starts")
+Rel(program, web_worker, "Creates & Starts")
+Rel(program, led_worker, "Creates & Starts")
+Rel(program, msg_bus, "Creates")
+Rel(program, gpio_led, "Creates")
+
+Rel(web_worker, msg_bus, "Publishes Message")
+Rel(led_worker, msg_bus, "Subscribes to 'led/flash'")
+Rel(led_worker, iled, "Controls LED")
+Rel(gpio_led, iled, "Implements", $tags="implements")
+
+SHOW_LEGEND()
+@enduml
