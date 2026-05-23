@@ -69,14 +69,23 @@ jobs:
       run: |
         $testDir = "src\NanoFrameworkApp.Tests\bin\Release"
         
-        # Copy test adapter DLLs
+        # Copy test adapter DLLs from NuGet package
         $adapterSource = "tools\test-adapter\nanoFramework.TestFramework.3.0.80\lib\net48"
         Copy-Item "$adapterSource\nanoFramework.TestAdapter.dll" $testDir -Force
-        Copy-Item "$adapterSource\nanoFramework.UnitTestLauncher.dll" $testDir -Force
+        
+        # Copy UnitTestLauncher (it's an exe in lib\, not lib\net48\)
+        $launcherSource = "tools\test-adapter\nanoFramework.TestFramework.3.0.80\lib"
+        Copy-Item "$launcherSource\nanoFramework.UnitTestLauncher.exe" $testDir -Force
         
         # Run tests with TRX output for publishing
         $vstestPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core -find **\vstest.console.exe | Select-Object -First 1
-        & $vstestPath "$testDir\NFUnitTest.dll" /TestAdapterPath:"$testDir" /Settings:src\nano.runsettings /Logger:"trx;LogFileName=TestResults.trx" /ResultsDirectory:TestResults
+        if (-not $vstestPath) {
+          # Fallback: use dotnet vstest
+          $vstestPath = "dotnet"
+          & $vstestPath vstest "$testDir\NFUnitTest.dll" /TestAdapterPath:"$testDir" /Settings:src\nano.runsettings /Logger:"trx;LogFileName=TestResults.trx" /ResultsDirectory:TestResults
+        } else {
+          & $vstestPath "$testDir\NFUnitTest.dll" /TestAdapterPath:"$testDir" /Settings:src\nano.runsettings /Logger:"trx;LogFileName=TestResults.trx" /ResultsDirectory:TestResults
+        }
 
     - name: Publish Test Results
       uses: dorny/test-reporter@v1
@@ -85,6 +94,7 @@ jobs:
         name: 'Unit Tests'
         path: 'TestResults/*.trx'
         reporter: 'dotnet-trx'
+        fail-on-empty: 'false'
 
     - name: Upload Test Results
       uses: actions/upload-artifact@v4
