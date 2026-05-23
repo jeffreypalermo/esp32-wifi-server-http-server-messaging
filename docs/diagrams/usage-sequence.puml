@@ -1,0 +1,68 @@
+@startuml usage-sequence
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Usage Sequence Diagram - End-to-End User Journey
+
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #4472C4
+    LifeLineBorderColor #4472C4
+    ParticipantBorderColor #4472C4
+    ParticipantBackgroundColor #DCE6F1
+}
+
+actor "User" as User
+participant "Phone/Laptop\nWiFi Client" as Client
+participant "ESP32-S3\nWiFi Radio" as Radio
+participant "WifiApWorker\nSoftAP + DHCP" as WiFi
+participant "WebServerWorker\nHTTP :80" as Web
+participant "MessageBus\nPub/Sub" as Bus
+participant "LedWorker\nGPIO Controller" as Led
+participant "Onboard LED\nGPIO 21" as LED
+
+== WiFi Connection ==
+
+User -> Client : Select "NanoFramework-ESP32S3"
+Client -> Radio : Association Request (Open Auth)
+Radio -> WiFi : Client connected
+WiFi -> Client : DHCP Offer (192.168.4.x)
+Client -> WiFi : DHCP Ack
+Client --> User : Connected (IP: 192.168.4.2)
+
+== Load Web Page ==
+
+User -> Client : Open http://192.168.4.1
+Client -> Web : HTTP GET /
+activate Web
+Web -> Web : Generate HTML page
+Web --> Client : 200 OK (HTML + JavaScript)
+deactivate Web
+Client --> User : Display "Flash LED" button
+
+== Flash LED ==
+
+User -> Client : Tap "Flash LED" button
+Client -> Web : HTTP POST /api/led/flash
+activate Web
+Web -> Bus : Publish("led/flash", "3")
+Web --> Client : 200 "LED flash triggered"
+deactivate Web
+Client --> User : Show "LED flash triggered"
+
+activate Bus
+Bus -> Led : OnFlashMessage(msg)
+deactivate Bus
+
+activate Led
+loop 3 times
+    Led -> LED : HIGH (on)
+    note right of LED : LED illuminates
+    Led -> Led : Sleep 300ms
+    Led -> LED : LOW (off)
+    Led -> Led : Sleep 300ms
+end
+deactivate Led
+
+User -> User : Observes LED blinking 3 times
+
+@enduml

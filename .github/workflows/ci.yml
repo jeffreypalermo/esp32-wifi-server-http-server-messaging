@@ -1,0 +1,157 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          3.1.x
+          10.0.x
+
+    - name: Install nanoFramework build tools
+      run: |
+        dotnet tool install -g nanoclr
+        nuget install nanoFramework.TestFramework -Version 3.0.80 -OutputDirectory tools\test-adapter
+
+    - name: Install NuGet CLI
+      run: |
+        $nugetUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+        Invoke-WebRequest -Uri $nugetUrl -OutFile "$env:TEMP\nuget.exe"
+        echo "$env:TEMP" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Setup nanoFramework MSBuild targets
+      run: |
+        # Verify tools directory exists (committed to repo)
+        if (Test-Path "tools\nanoFramework\v1.0\NFProjectSystem.props") {
+          Write-Host "nanoFramework MSBuild targets found in repo"
+        } else {
+          # Fallback: Download VS extension VSIX containing MSBuild targets
+          $vsixUrl = "https://github.com/nanoframework/nf-Visual-Studio-extension/releases/download/v2022.14.1.8/nanoFramework.Tools.VS2022.Extension.vsix"
+          $vsixPath = "$env:TEMP\nf-extension.vsix"
+          Invoke-WebRequest -Uri $vsixUrl -OutFile $vsixPath
+          $extractDir = "$env:TEMP\nf-vsix"
+          Expand-Archive -Path $vsixPath -DestinationPath $extractDir -Force
+          $targetDir = "tools\nanoFramework\v1.0"
+          New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+          Copy-Item "$extractDir\`$MSBuild\nanoFramework\v1.0\*" $targetDir -Recurse -Force
+          Write-Host "nanoFramework MSBuild targets downloaded"
+        }
+
+    - name: Restore NuGet packages
+      run: |
+        $nuget = "$env:TEMP\nuget.exe"
+        & $nuget restore src\NanoFrameworkApp\packages.config -PackagesDirectory src\packages
+        & $nuget restore src\NanoFrameworkApp.Tests\packages.config -PackagesDirectory src\packages
+
+    - name: Build nanoFramework App
+      run: |
+        $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+        & $msbuild src\NanoFrameworkApp\NanoFrameworkApp.nfproj /t:Build /p:Configuration=Release /v:minimal
+
+    - name: Build nanoFramework Tests
+      run: |
+        $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+        & $msbuild src\NanoFrameworkApp.Tests\NanoFrameworkApp.Tests.nfproj /t:Build /p:Configuration=Release /v:minimal
+
+    - name: Run Unit Tests
+      run: |
+        $testDir = "src\NanoFrameworkApp.Tests\bin\Release"
+        
+        # Copy test adapter DLLs from NuGet package
+        $adapterSource = "tools\test-adapter\nanoFramework.TestFramework.3.0.80\lib\net48"
+        Copy-Item "$adapterSource\nanoFramework.TestAdapter.dll" $testDir -Force
+        
+        # Copy UnitTestLauncher (it's an exe in lib\, not lib\net48\)
+        $launcherSource = "tools\test-adapter\nanoFramework.TestFramework.3.0.80\lib"
+        Copy-Item "$launcherSource\nanoFramework.UnitTestLauncher.exe" $testDir -Force
+        
+        # Run tests with TRX output for publishing
+        $vstestPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core -find **\vstest.console.exe | Select-Object -First 1
+        if (-not $vstestPath) {
+          # Fallback: use dotnet vstest
+          $vstestPath = "dotnet"
+          & $vstestPath vstest "$testDir\NFUnitTest.dll" /TestAdapterPath:"$testDir" /Settings:src\nano.runsettings /Logger:"trx;LogFileName=TestResults.trx" /ResultsDirectory:TestResults
+        } else {
+          & $vstestPath "$testDir\NFUnitTest.dll" /TestAdapterPath:"$testDir" /Settings:src\nano.runsettings /Logger:"trx;LogFileName=TestResults.trx" /ResultsDirectory:TestResults
+        }
+
+    - name: Publish Test Results
+      if: always()
+      run: |
+        # Parse TRX file and create GitHub Actions job summary
+        $trxFiles = Get-ChildItem "TestResults\*.trx" -ErrorAction SilentlyContinue
+        if ($trxFiles) {
+          foreach ($trx in $trxFiles) {
+            [xml]$xml = Get-Content $trx.FullName
+            $counters = $xml.TestRun.ResultSummary.Counters
+            $total = $counters.total
+            $passed = $counters.passed
+            $failed = $counters.failed
+            
+            $summary = "## Unit Test Results`n`n"
+            $summary += "| Metric | Count |`n|--------|-------|`n"
+            $summary += "| Total | $total |`n"
+            $summary += "| ✅ Passed | $passed |`n"
+            $summary += "| ❌ Failed | $failed |`n`n"
+            
+            if ([int]$failed -gt 0) {
+              $summary += "### Failed Tests`n"
+              $results = $xml.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq "Failed" }
+              foreach ($r in $results) {
+                $summary += "- **$($r.testName)**: $($r.Output.ErrorInfo.Message)`n"
+              }
+            }
+            
+            $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            Write-Host "Tests: $passed passed, $failed failed, $total total"
+            
+            if ([int]$failed -gt 0) { exit 1 }
+          }
+        } else {
+          Write-Host "No TRX files found"
+          "## ⚠️ No test results found" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+        }
+
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: TestResults/
+
+    - name: Build Deployment Package
+      run: |
+        $peDir = "src\NanoFrameworkApp\bin\Release"
+        New-Item -ItemType Directory -Path "publish" -Force | Out-Null
+        
+        $peFiles = Get-ChildItem "$peDir\*.pe" | Sort-Object Name
+        $combinedPath = "publish\deployment.bin"
+        $stream = [System.IO.File]::Create($combinedPath)
+        foreach ($pe in $peFiles) {
+            $bytes = [System.IO.File]::ReadAllBytes($pe.FullName)
+            $stream.Write($bytes, 0, $bytes.Length)
+            $padding = (4 - ($bytes.Length % 4)) % 4
+            if ($padding -gt 0) { $stream.Write((New-Object byte[] $padding), 0, $padding) }
+        }
+        $stream.Close()
+        
+        $size = (Get-Item $combinedPath).Length
+        Write-Host "Deployment binary: $size bytes ($($peFiles.Count) assemblies)"
+
+    - name: Upload Deployment Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32-deployment
+        path: publish/deployment.bin

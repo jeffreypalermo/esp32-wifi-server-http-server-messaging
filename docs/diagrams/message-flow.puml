@@ -1,0 +1,29 @@
+@startuml message-flow
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Message Flow Diagram - Inter-Worker Communication
+
+Person(user, "User", "Connected to WiFi AP via phone/laptop")
+
+System_Boundary(esp32, "ESP32-S3 Device") {
+
+    Container(web_server, "WebServerWorker", "HTTP Port 80", "Receives button clicks from browser")
+    Container(message_bus, "MessageBus", "In-Memory Pub/Sub", "Routes messages by topic")
+    Container(led_worker, "LedWorker", "GPIO Worker", "Flashes LED based on messages")
+    Container(wifi_ap, "WifiApWorker", "SoftAP + DHCP", "Provides network connectivity")
+
+    ContainerDb(topics, "Topic Registry", "Hashtable", "Stores subscriber callbacks per topic")
+}
+
+Container(led, "Onboard LED", "GPIO 21", "Physical LED hardware")
+
+Rel(user, wifi_ap, "1. Connects to WiFi", "SSID: NanoFramework-ESP32S3")
+Rel(user, web_server, "2. HTTP GET /", "Loads web page")
+Rel(user, web_server, "3. HTTP POST /api/led/flash", "Button click")
+Rel(web_server, message_bus, "4. Publish", "Topic: 'led/flash', Payload: '3'")
+Rel(message_bus, topics, "5. Lookup subscribers")
+Rel(message_bus, led_worker, "6. Invoke callback", "OnFlashMessage(message)")
+Rel(led_worker, led, "7. Flash LED", "3x on/off cycle")
+
+SHOW_LEGEND()
+@enduml

@@ -1,0 +1,47 @@
+@startuml message-flow-sequence
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Message Flow Sequence Diagram - LED Flash Request
+
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #4472C4
+    LifeLineBorderColor #4472C4
+    ParticipantBorderColor #4472C4
+    ParticipantBackgroundColor #DCE6F1
+}
+
+participant "WebServerWorker" as Web
+participant "MessageBus" as Bus
+participant "LedWorker" as Led
+participant "GpioLedController" as GPIO
+participant "LED Hardware" as HW
+
+Web -> Bus : Publish(new Message("led/flash", "3"))
+
+activate Bus
+Bus -> Bus : Lock subscribers table
+Bus -> Bus : Lookup topic "led/flash"
+Bus -> Bus : Clone subscriber list (snapshot)
+Bus -> Led : Invoke OnFlashMessage(message)
+deactivate Bus
+
+activate Led
+Led -> Led : Parse payload: times = 3
+loop 3 times
+    Led -> GPIO : TurnOn()
+    activate GPIO
+    GPIO -> HW : Write(pin 21, HIGH)
+    GPIO --> Led : done
+    deactivate GPIO
+    Led -> Led : Thread.Sleep(300ms)
+    Led -> GPIO : TurnOff()
+    activate GPIO
+    GPIO -> HW : Write(pin 21, LOW)
+    GPIO --> Led : done
+    deactivate GPIO
+    Led -> Led : Thread.Sleep(300ms)
+end
+deactivate Led
+
+@enduml
