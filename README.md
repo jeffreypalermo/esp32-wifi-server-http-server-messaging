@@ -308,3 +308,8 @@ Sample code in this repository is also MIT licensed.
 **Last Updated**: May 2024  
 **Version**: nanoFramework 2.5.144 + nanoff 2.5.144
 
+
+## Build Status
+
+[![CI Build and Test](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml)
+
