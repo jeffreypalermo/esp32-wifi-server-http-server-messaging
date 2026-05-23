@@ -1,0 +1,23 @@
+# Build outputs
+src/*/bin/
+src/*/obj/
+publish/
+
+# NuGet packages
+src/packages/
+
+# VS files
+*.user
+*.suo
+.vs/
+
+# Test results
+TestResults/
+*.trx
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temp
+*.tmp
