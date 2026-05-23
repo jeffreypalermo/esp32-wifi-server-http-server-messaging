@@ -4,7 +4,7 @@ on:
   push:
     branches: ['**']
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   build-and-test:
@@ -130,6 +130,65 @@ jobs:
       with:
         name: test-results
         path: TestResults/
+
+    - name: Run Coverage Tests
+      run: |
+        dotnet test src\NanoFrameworkApp.CoverageTests\NanoFrameworkApp.CoverageTests.csproj --collect:"XPlat Code Coverage" --results-directory CoverageResults --logger "trx;LogFileName=CoverageTestResults.trx"
+
+    - name: Publish Coverage Summary
+      if: always()
+      run: |
+        # Parse coverage TRX
+        $trxFiles = Get-ChildItem "CoverageResults\*.trx" -ErrorAction SilentlyContinue
+        if ($trxFiles) {
+          foreach ($trx in $trxFiles) {
+            [xml]$xml = Get-Content $trx.FullName
+            $counters = $xml.TestRun.ResultSummary.Counters
+            $total = $counters.total
+            $passed = $counters.passed
+            $failed = $counters.failed
+            $summary = "`n## Coverage Test Results (.NET 10 / xUnit)`n`n"
+            $summary += "| Metric | Count |`n|--------|-------|`n"
+            $summary += "| Total | $total |`n"
+            $summary += "| ✅ Passed | $passed |`n"
+            $summary += "| ❌ Failed | $failed |`n`n"
+            $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
+        }
+        
+        # Parse Cobertura coverage XML
+        $covFile = Get-ChildItem "CoverageResults\**\coverage.cobertura.xml" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($covFile) {
+          [xml]$cov = Get-Content $covFile.FullName
+          $lineRate = [math]::Round([double]$cov.coverage.'line-rate' * 100, 1)
+          $branchRate = [math]::Round([double]$cov.coverage.'branch-rate' * 100, 1)
+          
+          $covSummary = "## Code Coverage (Portable Logic)`n`n"
+          $covSummary += "| Metric | Coverage |`n|--------|----------|`n"
+          $covSummary += "| Line Coverage | $lineRate% |`n"
+          $covSummary += "| Branch Coverage | $branchRate% |`n`n"
+          
+          $covSummary += "| Class | Lines | Branches |`n|-------|-------|----------|`n"
+          foreach ($pkg in $cov.coverage.packages.package) {
+            foreach ($cls in $pkg.classes.class) {
+              $clsLine = [math]::Round([double]$cls.'line-rate' * 100, 1)
+              $clsBranch = [math]::Round([double]$cls.'branch-rate' * 100, 1)
+              $covSummary += "| $($cls.name) | $clsLine% | $clsBranch% |`n"
+            }
+          }
+          
+          $covSummary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          Write-Host "Coverage: Lines=$lineRate% Branches=$branchRate%"
+        } else {
+          Write-Host "No coverage file found"
+        }
+
+    - name: Upload Coverage Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-results
+        path: CoverageResults/
 
     - name: Build Deployment Package
       run: |
