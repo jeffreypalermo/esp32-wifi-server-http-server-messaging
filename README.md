@@ -301,6 +301,34 @@ You should see all 13 assemblies listed including `NanoFrameworkApp, 1.0.0.0`.
 
 ---
 
+## Code Metrics
+
+Lines of code counted using the Capers Jones logical LOC method (non-blank, non-comment source statements):
+
+| Category | Files | Logical LOC | Comments | Blank | Total Lines |
+|----------|-------|-------------|----------|-------|-------------|
+| Production C# | 10 | 531 | 20 | 84 | 635 |
+| Unit Test C# | 6 | 297 | 14 | 73 | 384 |
+| Integration/E2E Test C# | 2 | 245 | 24 | 49 | 318 |
+| Build/DevOps Scripts | 5 | 596 | 38 | 116 | 750 |
+| Configuration/Project Files | 9 | 295 | 8 | 10 | 313 |
+| PlantUML Diagrams | 6 | 225 | 0 | 49 | 274 |
+| **Total** | **38** | **2,189** | **104** | **381** | **2,674** |
+
+### Key Ratios
+
+| Metric | Value |
+|--------|-------|
+| Test-to-production code ratio | 1.02:1 |
+| Comment density | 4.7% |
+| Production code % of total | 24.3% |
+| Test code % of total | 24.8% |
+| DevOps/build infrastructure % | 27.2% |
+
+*Methodology: Capers Jones logical source statements — counts executable statements excluding blank lines and comments. Block comments (`/* */`) and single-line comments (`//`, `#`) are excluded from logical LOC.*
+
+---
+
 ## License
 
 See [LICENSE](LICENSE) for details.
