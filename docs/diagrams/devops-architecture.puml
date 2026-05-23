@@ -1,0 +1,51 @@
+@startuml devops-architecture
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+title DevOps Architecture Diagram - CI/CD Pipeline
+
+Deployment_Node(github, "GitHub", "Cloud") {
+    Deployment_Node(repo, "Repository", "esp32-wifi-server-http-server-messaging") {
+        Container(source, "Source Code", "C# / .nfproj", "nanoFramework application + tests")
+        Container(workflow, "CI Workflow", "ci.yml", "GitHub Actions workflow definition")
+    }
+    Deployment_Node(actions, "GitHub Actions", "windows-latest runner") {
+        Container(checkout, "Checkout", "actions/checkout@v4", "Clone repository")
+        Container(setup_dotnet, "Setup .NET", "actions/setup-dotnet@v4", ".NET 3.1 + 10.0")
+        Container(restore, "NuGet Restore", "nuget.exe", "Restore packages.config dependencies")
+        Container(build_app, "Build App", "MSBuild", "Compile .nfproj to PE assemblies")
+        Container(build_test, "Build Tests", "MSBuild", "Compile test .nfproj")
+        Container(run_tests, "Run Tests", "vstest + nanoCLR", "Execute 18 unit tests on simulator")
+        Container(publish_results, "Publish Results", "dorny/test-reporter", "TRX → GitHub Check annotations")
+        Container(package, "Package", "PowerShell", "Combine PE files into deployment.bin")
+        Container(artifacts, "Upload Artifacts", "actions/upload-artifact@v4", "deployment.bin + test results")
+    }
+    Deployment_Node(protection, "Branch Protection", "main branch") {
+        Container(status_check, "Required Status Check", "build-and-test", "Must pass before merge")
+        Container(pr_review, "PR Review", "Pull Request", "Code review gate")
+    }
+}
+
+Deployment_Node(dev_machine, "Developer Machine", "Windows") {
+    Container(ide, "IDE / CLI", "VS 2022+ / PowerShell", "Local development and testing")
+    Container(nanoff, "nanoff", ".NET Tool", "Flash firmware + deploy to device")
+}
+
+Deployment_Node(device, "ESP32-S3", "Seeed XIAO") {
+    Container(firmware, "Deployed App", "deployment.bin", "Running nanoFramework application")
+}
+
+Rel(source, checkout, "Push / PR triggers")
+Rel(checkout, restore, "")
+Rel(restore, build_app, "")
+Rel(build_app, build_test, "")
+Rel(build_test, run_tests, "")
+Rel(run_tests, publish_results, "TestResults.trx")
+Rel(run_tests, package, "On success")
+Rel(package, artifacts, "deployment.bin")
+Rel(status_check, run_tests, "Requires pass")
+Rel(ide, source, "git push")
+Rel(artifacts, nanoff, "Download")
+Rel(nanoff, firmware, "USB Serial deploy")
+
+SHOW_LEGEND()
+@enduml

@@ -21,3 +21,6 @@ Thumbs.db
 
 # Temp
 *.tmp
+
+# PlantUML tool (download separately)
+tools/plantuml.jar

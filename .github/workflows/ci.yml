@@ -33,20 +33,21 @@ jobs:
 
     - name: Setup nanoFramework MSBuild targets
       run: |
-        # Download VS extension VSIX containing MSBuild targets
-        $vsixUrl = "https://github.com/nanoframework/nf-Visual-Studio-extension/releases/download/v2022.14.1.8/nanoFramework.Tools.VS2022.Extension.vsix"
-        $vsixPath = "$env:TEMP\nf-extension.vsix"
-        Invoke-WebRequest -Uri $vsixUrl -OutFile $vsixPath
-        
-        # Extract MSBuild targets from VSIX
-        $extractDir = "$env:TEMP\nf-vsix"
-        Expand-Archive -Path $vsixPath -DestinationPath $extractDir -Force
-        
-        # Copy to tools directory
-        $targetDir = "tools\nanoFramework\v1.0"
-        if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force }
-        Copy-Item "$extractDir\`$MSBuild\nanoFramework\v1.0\*" $targetDir -Recurse -Force
-        Write-Host "nanoFramework MSBuild targets installed to $targetDir"
+        # Verify tools directory exists (committed to repo)
+        if (Test-Path "tools\nanoFramework\v1.0\NFProjectSystem.props") {
+          Write-Host "nanoFramework MSBuild targets found in repo"
+        } else {
+          # Fallback: Download VS extension VSIX containing MSBuild targets
+          $vsixUrl = "https://github.com/nanoframework/nf-Visual-Studio-extension/releases/download/v2022.14.1.8/nanoFramework.Tools.VS2022.Extension.vsix"
+          $vsixPath = "$env:TEMP\nf-extension.vsix"
+          Invoke-WebRequest -Uri $vsixUrl -OutFile $vsixPath
+          $extractDir = "$env:TEMP\nf-vsix"
+          Expand-Archive -Path $vsixPath -DestinationPath $extractDir -Force
+          $targetDir = "tools\nanoFramework\v1.0"
+          New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+          Copy-Item "$extractDir\`$MSBuild\nanoFramework\v1.0\*" $targetDir -Recurse -Force
+          Write-Host "nanoFramework MSBuild targets downloaded"
+        }
 
     - name: Restore NuGet packages
       run: |
