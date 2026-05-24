@@ -11,13 +11,13 @@ namespace NanoFrameworkApp
     {
         public static void Main()
         {
-            Debug.WriteLine("=== nanoFramework ESP32-S3 Starting ===");
+            Debug.WriteLine("=== nanoFramework " + BoardConfig.SocName + " Starting ===");
 
             // Create shared LED controller (only one can own the GPIO pin)
             ILedController ledController = null;
             try
             {
-                ledController = new GpioLedController(21);
+                ledController = new GpioLedController(BoardConfig.LedPin, BoardConfig.LedActiveHigh);
                 // Blink 3 times = "I'm alive"
                 for (int i = 0; i < 3; i++)
                 {
@@ -52,11 +52,12 @@ namespace NanoFrameworkApp
 
             // Create message bus and start workers
             MessageBus messageBus = new MessageBus();
+            DeviceStatus deviceStatus = new DeviceStatus();
 
             // Start LED worker
             try
             {
-                LedWorker ledWorker = new LedWorker(ledController, messageBus);
+                LedWorker ledWorker = new LedWorker(ledController, messageBus, deviceStatus);
                 ledWorker.Start();
                 Debug.WriteLine("LED worker started");
             }
@@ -68,7 +69,7 @@ namespace NanoFrameworkApp
             // Start web server
             try
             {
-                WebServerWorker webServerWorker = new WebServerWorker(messageBus);
+                WebServerWorker webServerWorker = new WebServerWorker(messageBus, deviceStatus);
                 webServerWorker.Start();
                 Debug.WriteLine("Web server started on port 80");
             }

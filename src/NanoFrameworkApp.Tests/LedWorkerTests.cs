@@ -1,5 +1,6 @@
 using System.Threading;
 using nanoFramework.TestFramework;
+using NanoFrameworkApp;
 using NanoFrameworkApp.Messaging;
 using NanoFrameworkApp.Tests.Hardware;
 using NanoFrameworkApp.Workers;
@@ -14,7 +15,7 @@ namespace NanoFrameworkApp.Tests
         {
             MessageBus bus = new MessageBus();
             FakeLedController led = new FakeLedController();
-            LedWorker worker = new LedWorker(led, bus);
+            LedWorker worker = new LedWorker(led, bus, new DeviceStatus());
 
             worker.Start();
 
@@ -28,7 +29,7 @@ namespace NanoFrameworkApp.Tests
         {
             MessageBus bus = new MessageBus();
             FakeLedController led = new FakeLedController();
-            LedWorker worker = new LedWorker(led, bus);
+            LedWorker worker = new LedWorker(led, bus, new DeviceStatus());
 
             Assert.AreEqual("LedWorker", worker.Name, "Worker name should be LedWorker");
         }
@@ -38,7 +39,7 @@ namespace NanoFrameworkApp.Tests
         {
             MessageBus bus = new MessageBus();
             FakeLedController led = new FakeLedController();
-            LedWorker worker = new LedWorker(led, bus);
+            LedWorker worker = new LedWorker(led, bus, new DeviceStatus());
 
             worker.Start();
 
@@ -58,7 +59,7 @@ namespace NanoFrameworkApp.Tests
         {
             MessageBus bus = new MessageBus();
             FakeLedController led = new FakeLedController();
-            LedWorker worker = new LedWorker(led, bus);
+            LedWorker worker = new LedWorker(led, bus, new DeviceStatus());
 
             worker.Start();
 
@@ -80,7 +81,7 @@ namespace NanoFrameworkApp.Tests
         {
             MessageBus bus = new MessageBus();
             FakeLedController led = new FakeLedController();
-            LedWorker worker = new LedWorker(led, bus);
+            LedWorker worker = new LedWorker(led, bus, new DeviceStatus());
 
             worker.Start();
             Assert.IsTrue(worker.IsRunning, "Worker should be running after Start()");

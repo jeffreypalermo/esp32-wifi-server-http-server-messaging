@@ -5,13 +5,14 @@ using System.Net.NetworkInformation;
 using System.Threading;
 using Iot.Device.DhcpServer;
 using nanoFramework.Runtime.Native;
+using NanoFrameworkApp.Hardware;
 
 namespace NanoFrameworkApp.Workers
 {
     public class WifiApWorker : IWorker
     {
         public static string SoftApIP = "192.168.4.1";
-        public static string SoftApSsid = "NanoFramework-ESP32S3";
+        public static string SoftApSsid = "NanoFramework-" + BoardConfig.SocName;
 
         private bool _isRunning;
         private DhcpServer _dhcpServer;

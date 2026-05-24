@@ -27,6 +27,9 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(ExtraDefineConstants)' != ''">
+    <DefineConstants>$(DefineConstants);$(ExtraDefineConstants)</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="MessageTests.cs" />
     <Compile Include="MessageBusTests.cs" />
@@ -35,9 +38,12 @@
     <Compile Include="Hardware\FakeLedController.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <!-- Include source files from main project (excluding Program.cs) to avoid exe entry point conflict -->
+    <Compile Include="..\NanoFrameworkApp\DeviceStatus.cs" Link="DeviceStatus.cs" />
     <Compile Include="..\NanoFrameworkApp\Messaging\Message.cs" Link="Messaging\Message.cs" />
     <Compile Include="..\NanoFrameworkApp\Messaging\MessageBus.cs" Link="Messaging\MessageBus.cs" />
     <Compile Include="..\NanoFrameworkApp\Hardware\ILedController.cs" Link="Hardware\ILedController.cs" />
+    <Compile Include="..\NanoFrameworkApp\Hardware\SocType.cs" Link="Hardware\SocType.cs" />
+    <Compile Include="..\NanoFrameworkApp\Hardware\BoardConfig.cs" Link="Hardware\BoardConfig.cs" />
     <Compile Include="..\NanoFrameworkApp\Hardware\GpioLedController.cs" Link="Hardware\GpioLedController.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\IWorker.cs" Link="Workers\IWorker.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\LedWorker.cs" Link="Workers\LedWorker.cs" />

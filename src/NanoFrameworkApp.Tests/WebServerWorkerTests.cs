@@ -1,4 +1,5 @@
 using nanoFramework.TestFramework;
+using NanoFrameworkApp;
 using NanoFrameworkApp.Messaging;
 using NanoFrameworkApp.Workers;
 
@@ -13,7 +14,7 @@ namespace NanoFrameworkApp.Tests
             MessageBus bus = new MessageBus();
 
             // Verify the worker can be instantiated without throwing
-            WebServerWorker worker = new WebServerWorker(bus);
+            WebServerWorker worker = new WebServerWorker(bus, new DeviceStatus());
 
             Assert.IsNotNull(worker, "WebServerWorker should be created successfully");
         }
@@ -22,7 +23,7 @@ namespace NanoFrameworkApp.Tests
         public void TestWebServerWorkerName()
         {
             MessageBus bus = new MessageBus();
-            WebServerWorker worker = new WebServerWorker(bus);
+            WebServerWorker worker = new WebServerWorker(bus, new DeviceStatus());
 
             Assert.AreEqual("WebServerWorker", worker.Name, "Worker name should be WebServerWorker");
         }
@@ -31,7 +32,7 @@ namespace NanoFrameworkApp.Tests
         public void TestWebServerWorkerStartSetsRunning()
         {
             MessageBus bus = new MessageBus();
-            WebServerWorker worker = new WebServerWorker(bus);
+            WebServerWorker worker = new WebServerWorker(bus, new DeviceStatus());
 
             // On a non-device environment, Start may fail gracefully
             // since HttpListener requires a real network stack.
