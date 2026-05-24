@@ -47,6 +47,7 @@
     <Compile Include="..\NanoFrameworkApp\Hardware\GpioLedController.cs" Link="Hardware\GpioLedController.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\IWorker.cs" Link="Workers\IWorker.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\LedWorker.cs" Link="Workers\LedWorker.cs" />
+    <Compile Include="..\NanoFrameworkApp\Workers\HtmlBuilder.cs" Link="Workers\HtmlBuilder.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\WifiApWorker.cs" Link="Workers\WifiApWorker.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\WebServerWorker.cs" Link="Workers\WebServerWorker.cs" />
   </ItemGroup>

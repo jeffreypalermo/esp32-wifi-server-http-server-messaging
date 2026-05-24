@@ -37,6 +37,7 @@
     <Compile Include="Messaging\MessageBus.cs" />
     <Compile Include="Workers\IWorker.cs" />
     <Compile Include="Workers\LedWorker.cs" />
+    <Compile Include="Workers\HtmlBuilder.cs" />
     <Compile Include="Workers\WifiApWorker.cs" />
     <Compile Include="Workers\WebServerWorker.cs" />
     <Compile Include="Hardware\ILedController.cs" />
