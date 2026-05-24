@@ -1,8 +1,8 @@
-# ESP32-S3 WiFi Server + HTTP Server + Messaging
+# ESP32 WiFi Server + HTTP Server + Messaging
 
 [![CI Build and Test](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreypalermo/esp32-wifi-server-http-server-messaging/actions/workflows/ci.yml)
 
-A complete embedded IoT application built with [.NET nanoFramework](https://nanoframework.net/) for the **Seeed Studio XIAO ESP32-S3**. The device runs as a standalone WiFi access point with an HTTP web server and LED control — no router or internet connection required.
+A complete embedded IoT application built with [.NET nanoFramework](https://nanoframework.net/) targeting two ESP32 boards: the **Seeed Studio XIAO ESP32-S3** and the **Aideepen ESP32-C3 SuperMini**. The device runs as a standalone WiFi access point with an HTTP web server and LED control — no router or internet connection required.
 
 **Connect your phone -> open the web page -> tap the button -> the LED blinks.**
 
@@ -18,11 +18,12 @@ The application uses a message-driven architecture with three independent backgr
 
 | Component | Responsibility |
 |-----------|---------------|
-| **WifiApWorker** | Configures ESP32-S3 as a WiFi access point (SoftAP), assigns IPs via DHCP |
+| **WifiApWorker** | Configures ESP32 as a WiFi access point (SoftAP), assigns IPs via DHCP |
 | **WebServerWorker** | HTTP server on port 80 — serves the web UI and REST API |
 | **LedWorker** | Subscribes to `led/flash` messages, controls the onboard LED via GPIO |
 | **MessageBus** | Thread-safe pub/sub broker routing messages between workers |
-| **GpioLedController** | Hardware abstraction layer for GPIO pin 21 (onboard LED) |
+| **GpioLedController** | Hardware abstraction layer for the onboard LED GPIO pin |
+| **BoardConfig** | Compile-time constants for LED pin, polarity, and SoC name per target |
 
 ---
 
@@ -32,12 +33,18 @@ The application uses a message-driven architecture with three independent backgr
 
 ### Hardware
 
-- **Board**: Seeed Studio XIAO ESP32-S3
-- **MCU**: ESP32-S3 (QFN56) with integrated WiFi/BLE
-- **Flash**: 8 MB
-- **PSRAM**: 8 MB
-- **LED**: Onboard yellow LED on GPIO pin 21
-- **WiFi**: 802.11n 2.4 GHz (SoftAP mode)
+Two boards are supported, selected at build time via `-Target`:
+
+| | Seeed Studio XIAO ESP32-S3 | Aideepen ESP32-C3 SuperMini |
+|---|---|---|
+| **Target flag** | `-Target esp32s3` (default) | `-Target esp32c3` |
+| **MCU** | ESP32-S3 (dual-core, 240 MHz) | ESP32-C3 (RISC-V, 160 MHz) |
+| **Flash** | 8 MB | 4 MB |
+| **PSRAM** | 8 MB | — |
+| **LED pin** | GPIO 21 (yellow, active-high) | GPIO 8 (blue, active-low) |
+| **WiFi SSID** | `NanoFramework-ESP32-S3` | `NanoFramework-ESP32-C3` |
+| **nanoff target** | `ESP32_S3_BLE` | `XIAO_ESP32C3` |
+| **USB interface** | USB-Serial/JTAG | USB-Serial/JTAG (native) |
 
 ### Runtime Stack
 
@@ -49,7 +56,7 @@ The application uses a message-driven architecture with three independent backgr
 +----------------------------------+
 |  ESP-IDF v5.5.4 (native)        |
 +----------------------------------+
-|  ESP32-S3 Hardware               |
+|  ESP32-S3 / ESP32-C3 Hardware    |
 +----------------------------------+
 ```
 
@@ -70,7 +77,7 @@ The flow is:
 2. WebServerWorker publishes a `Message("led/flash", "3")` to the MessageBus
 3. MessageBus looks up subscribers for the `led/flash` topic
 4. LedWorker's callback is invoked with the message
-5. LedWorker parses the payload (number of flashes) and drives GPIO pin 21
+5. LedWorker parses the payload (number of flashes) and drives the onboard LED GPIO pin
 
 ---
 
@@ -78,15 +85,21 @@ The flow is:
 
 ![Usage Sequence](docs/diagrams/usage-sequence.png)
 
-### Quick Start (Using the Device)
+### Quick Start — ESP32-S3
 
-1. **Power on** the ESP32-S3 (USB-C cable)
+1. **Power on** the Seeed XIAO ESP32-S3 (USB-C cable)
 2. **Wait 5 seconds** — the LED blinks 3 times to signal startup
-3. **Connect to WiFi** from your phone or laptop:
-   - **SSID**: `NanoFramework-ESP32S3`
-   - **Password**: (none — open network)
+3. **Connect to WiFi**: SSID `NanoFramework-ESP32-S3` (no password)
 4. **Open browser**: http://192.168.4.1
-5. **Tap "Flash LED"** — the onboard LED blinks 3 times
+5. **Tap "Flash LED"** — the onboard yellow LED blinks 3 times
+
+### Quick Start — ESP32-C3
+
+1. **Power on** the Aideepen ESP32-C3 SuperMini (USB-C cable)
+2. **Wait 5 seconds** — startup sequence runs
+3. **Connect to WiFi**: SSID `NanoFramework-ESP32-C3` (no password)
+4. **Open browser**: http://192.168.4.1
+5. **Tap "Flash LED"** — the onboard blue LED blinks 3 times
 
 ### REST API
 
@@ -106,14 +119,15 @@ The flow is:
 
 Every push and pull request triggers the CI workflow (`.github/workflows/ci.yml`):
 
-1. **Setup** — .NET SDK 3.1 + 10.0, nanoCLR simulator, NuGet CLI
+1. **Setup** — .NET SDK 10.0, nanoCLR simulator, NuGet CLI (tools and packages cached for speed)
 2. **Restore** — NuGet packages for nanoFramework projects
 3. **Build App** — MSBuild compiles `.nfproj` to PE assemblies
 4. **Build Tests** — Compiles the unit test project
 5. **Run Tests** — Executes 18 unit tests on the nanoCLR WIN32 simulator
 6. **Publish Results** — TRX test results parsed into GitHub Actions job summary
-7. **Package** — Combines all PE files into `deployment.bin` (ready to flash)
-8. **Artifacts** — Uploads `deployment.bin` and test results
+7. **Coverage** — Runs 72 xUnit coverage tests with Coverlet; reports line/branch % per class
+8. **Package** — Combines all PE files into `deployment.bin` (ready to flash)
+9. **Artifacts** — Uploads `deployment.bin` and test results
 
 ### Branch Protection
 
@@ -140,8 +154,7 @@ Unit tests run on the nanoCLR simulator (no hardware needed) and results are pub
 ### Prerequisites
 
 - Windows 10/11
-- [.NET SDK 10.0](https://dot.net/download) (or 8.0+)
-- [.NET 3.1 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/3.1) (required by nanoff)
+- [.NET SDK 10.0](https://dot.net/download)
 - Visual Studio 2022+ with MSBuild, or standalone [Build Tools](https://visualstudio.microsoft.com/downloads/)
 
 ### Build
@@ -171,42 +184,75 @@ vstest.console.exe src\NanoFrameworkApp.Tests\bin\Release\NFUnitTest.dll `
 
 ---
 
-## Deploying to the ESP32-S3
+## Deploying to the Device
 
 ### Prerequisites
 
 ```powershell
 # Install the nanoFramework flasher tool
 dotnet tool install -g nanoff
+
+# Install esptool (required for ESP32-C3 bootloader reset after firmware flash)
+pip install esptool
 ```
 
 ### Flash Firmware + Deploy App
 
 ```powershell
-# Automated deployment (detects COM port, flashes firmware + app)
-.\deploy.ps1
+# ESP32-S3 (Seeed XIAO — default target)
+.\deploy.ps1 -Target esp32s3 -ComPort COM3
 
-# Or manually:
+# ESP32-C3 (Aideepen SuperMini)
+.\deploy.ps1 -Target esp32c3 -ComPort COM5
+
+# App-only re-deploy (firmware already flashed — much faster)
+.\deploy.ps1 -Target esp32s3 -ComPort COM3 -AppOnly
+.\deploy.ps1 -Target esp32c3 -ComPort COM5 -AppOnly
+```
+
+The script handles everything: firmware flash, esptool reset (ESP32-C3), build, test, and app deployment with automatic retry.
+
+### Manual Deployment — ESP32-S3
+
+```powershell
 # 1. Put device in bootloader mode: Hold BOOT, press RESET, release both
 # 2. Flash nanoFramework firmware
 nanoff --target ESP32_S3_BLE --serialport COM3 --update
 
 # 3. After reboot, deploy the application
-nanoff --nanodevice --serialport COM4 --deploy --image publish\deployment.bin
+nanoff --nanodevice --serialport COM3 --deploy --image publish\deployment.bin
 ```
 
-### Bootloader Mode (Seeed XIAO ESP32-S3)
+### Manual Deployment — ESP32-C3
 
+```powershell
+# 1. Flash nanoFramework firmware
+nanoff --target XIAO_ESP32C3 --serialport COM5 --update
+
+# 2. Exit bootloader (ESP32-C3 SuperMini has no auto-reset wiring)
+python -m esptool --chip esp32c3 --port COM5 run
+
+# 3. Wait ~10 seconds for reboot, then deploy the application
+nanoff --nanodevice --serialport COM5 --deploy --image publish\deployment.bin
+```
+
+### Bootloader Mode
+
+**Seeed XIAO ESP32-S3:**
 1. Hold the **BOOT** button (marked "B")
 2. While holding, press and release the **RESET** button (marked "R")
 3. Release the **BOOT** button
 4. The device is now in bootloader mode (COM port may change)
 
+**Aideepen ESP32-C3 SuperMini:**
+- Same BOOT+RESET sequence as above
+- After firmware flash, the board stays in bootloader until `esptool run` is called (no auto-reset circuit)
+
 ### Verify Deployment
 
 ```powershell
 # Check device is running nanoFramework and app is loaded
-nanoff --nanodevice --serialport COM4 --devicedetails
+nanoff --nanodevice --serialport COM5 --devicedetails
 ```
 
 You should see all 13 assemblies listed including `NanoFrameworkApp, 1.0.0.0`.
@@ -234,13 +280,15 @@ You should see all 13 assemblies listed including `NanoFrameworkApp, 1.0.0.0`.
 |   |   |   +-- Message.cs            # Topic + Payload DTO
 |   |   |   +-- MessageBus.cs         # Thread-safe pub/sub
 |   |   +-- Workers/
-|   |   |   +-- IWorker.cs            # Worker interface
-|   |   |   +-- WifiApWorker.cs       # SoftAP + DHCP
-|   |   |   +-- WebServerWorker.cs    # HTTP server + UI
-|   |   |   +-- LedWorker.cs          # LED flash controller
+|   |   |   +-- IWorker.cs                # Worker interface
+|   |   |   +-- WifiApWorker.cs           # SoftAP + DHCP
+|   |   |   +-- WebServerWorker.cs        # HTTP server + UI
+|   |   |   +-- HtmlBuilder.cs            # Board-aware HTML/CSS/JS generation
+|   |   |   +-- LedWorker.cs              # LED flash controller
 |   |   +-- Hardware/
-|   |   |   +-- ILedController.cs     # LED abstraction
-|   |   |   +-- GpioLedController.cs  # GPIO implementation
+|   |   |   +-- BoardConfig.cs           # Compile-time LED pin/polarity per SoC target
+|   |   |   +-- ILedController.cs        # LED abstraction
+|   |   |   +-- GpioLedController.cs     # GPIO implementation
 |   |   +-- NanoFrameworkApp.nfproj   # nanoFramework project file
 |   |   +-- packages.config           # NuGet dependencies
 |   +-- NanoFrameworkApp.Tests/        # Unit tests (nanoCLR)
@@ -293,11 +341,14 @@ You should see all 13 assemblies listed including `NanoFrameworkApp, 1.0.0.0`.
 | Problem | Solution |
 |---------|----------|
 | WiFi AP not appearing | Press RESET button on the board, wait 10 seconds |
-| COM port not found | Check Device Manager; port changes between bootloader (COM3) and normal mode (COM4) |
+| COM port not found | Check Device Manager; port may change between bootloader and normal mode |
 | Flash timeout on last block | Usually harmless — the data is already written. Press RESET. |
 | 404 on web page | Web server may not have started yet — wait 5-10 seconds after boot |
 | Build fails locally | Ensure MSBuild 17+ is available and `tools\nanoFramework\v1.0\` exists |
 | Tests fail with "assembly not found" | Run `nuget restore` on both packages.config files |
+| ESP32-C3: E2001 after firmware flash | Board stuck in bootloader — run `python -m esptool --chip esp32c3 --port COM5 run` then retry deploy |
+| ESP32-C3: E4000 "semaphore timeout" | COM port became unresponsive — unplug/replug USB, then retry esptool run |
+| Identify correct nanoff target | Run `nanoff --identifyfirmware --serialport COMX --platform esp32` |
 
 ---
 
