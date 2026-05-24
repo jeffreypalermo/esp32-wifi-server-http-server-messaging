@@ -16,14 +16,37 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: |
-          3.1.x
-          10.0.x
+        dotnet-version: '10.0.x'
+
+    - name: Cache dotnet global tools (nanoclr)
+      uses: actions/cache@v4
+      with:
+        path: ~/.dotnet/tools
+        key: dotnet-tools-${{ runner.os }}-nanoclr
+        restore-keys: dotnet-tools-${{ runner.os }}-
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          src/packages
+          tools/test-adapter
+          ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('src/**/packages.config') }}
+        restore-keys: nuget-${{ runner.os }}-
 
     - name: Install nanoFramework build tools
       run: |
-        dotnet tool install -g nanoclr
-        nuget install nanoFramework.TestFramework -Version 3.0.80 -OutputDirectory tools\test-adapter
+        if (-not (Get-Command nanoclr -ErrorAction SilentlyContinue)) {
+          dotnet tool install -g nanoclr
+        } else {
+          Write-Host "nanoclr already installed (cache hit)"
+        }
+        if (-not (Test-Path "tools\test-adapter\nanoFramework.TestFramework.3.0.80")) {
+          nuget install nanoFramework.TestFramework -Version 3.0.80 -OutputDirectory tools\test-adapter
+        } else {
+          Write-Host "nanoFramework.TestFramework already present (cache hit)"
+        }
 
     - name: Install NuGet CLI
       run: |
