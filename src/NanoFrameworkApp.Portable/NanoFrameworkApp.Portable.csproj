@@ -16,5 +16,6 @@
     <Compile Include="..\NanoFrameworkApp\DeviceStatus.cs" Link="DeviceStatus.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\IWorker.cs" Link="Workers\IWorker.cs" />
     <Compile Include="..\NanoFrameworkApp\Workers\LedWorker.cs" Link="Workers\LedWorker.cs" />
+    <Compile Include="..\NanoFrameworkApp\Workers\HtmlBuilder.cs" Link="Workers\HtmlBuilder.cs" />
   </ItemGroup>
 </Project>
