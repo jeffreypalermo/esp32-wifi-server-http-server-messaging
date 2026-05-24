@@ -99,8 +99,16 @@ if (-not $AppOnly) {
     
     Write-Host ""
     Write-Host "  Firmware flashed successfully!" -ForegroundColor Green
+    
+    # ESP32-C3 SuperMini boards without auto-reset wiring need esptool to exit bootloader.
+    if ($Target -eq "esp32c3") {
+        Write-Host "  Resetting ESP32-C3 out of bootloader via esptool..." -ForegroundColor Gray
+        $chip = "esp32c3"
+        python -m esptool --chip $chip --port $ComPort --baud 115200 run 2>$null
+    }
+    
     Write-Host "  Waiting for device to reboot..." -ForegroundColor Gray
-    Start-Sleep -Seconds 5
+    Start-Sleep -Seconds 10
 }
 else {
     Write-Host "[2] Skipping firmware flash (--AppOnly)" -ForegroundColor Gray
@@ -142,11 +150,22 @@ if (-not $FirmwareOnly) {
     
     Write-Host "  Deploying $($peFiles.Count) assemblies to $ComPort..." -ForegroundColor Gray
     
-    nanoff --nanodevice --serialport $ComPort --deploy --image $deploymentBin
+    $maxRetries = 3
+    $deployed = $false
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        nanoff --nanodevice --serialport $ComPort --deploy --image $deploymentBin
+        if ($LASTEXITCODE -eq 0) { $deployed = $true; break }
+        if ($attempt -lt $maxRetries) {
+            Write-Host ""
+            Write-Host "  Deployment attempt $attempt failed. Retrying in 8s..." -ForegroundColor Yellow
+            Write-Host "  If the board is not responding, press the RESET button now." -ForegroundColor Yellow
+            Start-Sleep -Seconds 8
+        }
+    }
     
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $deployed) {
         Write-Host ""
-        Write-Host "ERROR: Application deployment failed!" -ForegroundColor Red
+        Write-Host "ERROR: Application deployment failed after $maxRetries attempts!" -ForegroundColor Red
         exit 1
     }
     
