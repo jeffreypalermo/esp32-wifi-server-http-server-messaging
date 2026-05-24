@@ -27,7 +27,11 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(ExtraDefineConstants)' != ''">
+    <DefineConstants>$(DefineConstants);$(ExtraDefineConstants)</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
+    <Compile Include="DeviceStatus.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Messaging\Message.cs" />
     <Compile Include="Messaging\MessageBus.cs" />
@@ -36,6 +40,8 @@
     <Compile Include="Workers\WifiApWorker.cs" />
     <Compile Include="Workers\WebServerWorker.cs" />
     <Compile Include="Hardware\ILedController.cs" />
+    <Compile Include="Hardware\SocType.cs" />
+    <Compile Include="Hardware\BoardConfig.cs" />
     <Compile Include="Hardware\GpioLedController.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

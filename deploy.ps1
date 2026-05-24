@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-    Deploy nanoFramework app to Seeed Studio XIAO ESP32-S3.
+    Deploy nanoFramework app to Seeed Studio XIAO ESP32-S3 or ESP32-C3.
 .DESCRIPTION
-    Flashes nanoFramework firmware and deploys the application to the ESP32-S3.
+    Builds and flashes nanoFramework firmware, then deploys the application.
 .PARAMETER ComPort
-    COM port where the device is connected (e.g., COM3). Auto-detected if not specified.
+    COM port where the device is connected (e.g., COM5). Auto-detected if not specified.
+.PARAMETER Target
+    SoC target: esp32s3 (default) or esp32c3.
 .PARAMETER FirmwareOnly
     Only flash the nanoFramework firmware, don't deploy the app.
 .PARAMETER AppOnly
@@ -12,15 +14,23 @@
 #>
 param(
     [string]$ComPort,
+    [ValidateSet("esp32s3", "esp32c3")]
+    [string]$Target = "esp32s3",
     [switch]$FirmwareOnly,
     [switch]$AppOnly
 )
 
 $ErrorActionPreference = "Stop"
 
+# Map target name to nanoff flash target
+$nanoffTarget = if ($Target -eq "esp32c3") { "XIAO_ESP32C3" } else { "ESP32_S3_BLE" }
+$socLabel     = if ($Target -eq "esp32c3") { "XIAO ESP32-C3" } else { "XIAO ESP32-S3" }
+$ssid         = if ($Target -eq "esp32c3") { "NanoFramework-ESP32-C3" } else { "NanoFramework-ESP32-S3" }
+
 Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host " nanoFramework ESP32-S3 Deployment" -ForegroundColor Cyan
+Write-Host " nanoFramework $socLabel Deployment" -ForegroundColor Cyan
+Write-Host " Target: $Target  (nanoff: $nanoffTarget)" -ForegroundColor Cyan
 Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
@@ -67,13 +77,12 @@ Write-Host ""
 # ── Step 2: Flash nanoFramework Firmware ─────────────────────────────────────
 
 if (-not $AppOnly) {
-    Write-Host "[2] Flashing nanoFramework firmware to ESP32-S3..." -ForegroundColor Yellow
-    Write-Host "    Target: ESP32_S3_BLE" -ForegroundColor Gray
+    Write-Host "[2] Flashing nanoFramework firmware to $socLabel..." -ForegroundColor Yellow
+    Write-Host "    Target: $nanoffTarget" -ForegroundColor Gray
     Write-Host "    Port:   $ComPort" -ForegroundColor Gray
     Write-Host ""
     
-    # Flash the firmware
-    nanoff --target ESP32_S3_BLE --serialport $ComPort --update
+    nanoff --target $nanoffTarget --serialport $ComPort --update
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
@@ -99,51 +108,53 @@ else {
 
 Write-Host ""
 
-# ── Step 3: Deploy Application ───────────────────────────────────────────────
+# ── Step 3: Build Application for Target ─────────────────────────────────────
 
 if (-not $FirmwareOnly) {
-    Write-Host "[3] Deploying application..." -ForegroundColor Yellow
+    Write-Host "[3] Building application for $socLabel..." -ForegroundColor Yellow
+    & "$PSScriptRoot\build.ps1" -Target $Target
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Build failed!" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host ""
+}
+
+# ── Step 4: Deploy Application ───────────────────────────────────────────────
+
+if (-not $FirmwareOnly) {
+    Write-Host "[4] Deploying application..." -ForegroundColor Yellow
     
     $publishDir = Join-Path $PSScriptRoot "publish"
     
-    if (-not (Test-Path $publishDir)) {
-        Write-Host "  Build output not found. Running build first..." -ForegroundColor Gray
-        & "$PSScriptRoot\build.ps1"
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Build failed!" -ForegroundColor Red
-            exit 1
-        }
-    }
+    # Collect all PE files and bundle into deployment.bin
+    $peFiles = Get-ChildItem $publishDir -Filter "*.pe" | Sort-Object Name
+    $deploymentBin = Join-Path $publishDir "deployment.bin"
     
-    # Collect all PE files for deployment
-    $peFiles = Get-ChildItem $publishDir -Filter "*.pe" | Select-Object -ExpandProperty FullName
+    $stream = [System.IO.File]::Create($deploymentBin)
+    foreach ($pe in $peFiles) {
+        $bytes = [System.IO.File]::ReadAllBytes($pe.FullName)
+        $stream.Write($bytes, 0, $bytes.Length)
+        $padding = (4 - ($bytes.Length % 4)) % 4
+        if ($padding -gt 0) { $stream.Write((New-Object byte[] $padding), 0, $padding) }
+    }
+    $stream.Close()
     
     Write-Host "  Deploying $($peFiles.Count) assemblies to $ComPort..." -ForegroundColor Gray
     
-    # Deploy using nanoff
-    $peArgs = $peFiles | ForEach-Object { "--deploy --image `"$_`"" }
-    $deployCmd = "nanoff --target ESP32_S3_BLE --serialport $ComPort $($peArgs -join ' ')"
-    
-    # nanoff deploy command
-    nanoff --target ESP32_S3_BLE --serialport $ComPort --deploy --image ($peFiles -join ',')
+    nanoff --nanodevice --serialport $ComPort --deploy --image $deploymentBin
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host ""
-        Write-Host "  Trying alternative deploy method..." -ForegroundColor Yellow
-        
-        # Alternative: deploy each PE file individually
-        foreach ($pe in $peFiles) {
-            $name = Split-Path $pe -Leaf
-            Write-Host "    Deploying $name..." -ForegroundColor Gray
-            nanoff --target ESP32_S3_BLE --serialport $ComPort --deploy --image $pe
-        }
+        Write-Host "ERROR: Application deployment failed!" -ForegroundColor Red
+        exit 1
     }
     
     Write-Host ""
     Write-Host "  Application deployed successfully!" -ForegroundColor Green
 }
 else {
-    Write-Host "[3] Skipping app deployment (--FirmwareOnly)" -ForegroundColor Gray
+    Write-Host "[4] Skipping app deployment (--FirmwareOnly)" -ForegroundColor Gray
 }
 
 # ── Done ─────────────────────────────────────────────────────────────────────
@@ -155,7 +166,7 @@ Write-Host "══════════════════════�
 Write-Host ""
 Write-Host " Next steps:" -ForegroundColor Yellow
 Write-Host "   1. The device will reboot automatically"
-Write-Host "   2. Connect to WiFi: 'NanoFramework-ESP32S3' (open/no password)"
+Write-Host "   2. Connect to WiFi: '$ssid' (open/no password)"
 Write-Host "   3. Open browser: http://192.168.4.1"
 Write-Host "   4. Click 'Flash LED' to test!"
 Write-Host ""

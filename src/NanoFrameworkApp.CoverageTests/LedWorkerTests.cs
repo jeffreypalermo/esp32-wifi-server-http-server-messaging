@@ -1,6 +1,7 @@
 using NanoFrameworkApp.Hardware;
 using NanoFrameworkApp.Messaging;
 using NanoFrameworkApp.Workers;
+using NanoFrameworkApp;
 
 namespace NanoFrameworkApp.CoverageTests;
 
@@ -31,7 +32,7 @@ public class LedWorkerTests
         var led = new FakeLedController();
         var bus = new MessageBus();
 
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
 
         Assert.False(worker.IsRunning);
     }
@@ -42,7 +43,7 @@ public class LedWorkerTests
         var led = new FakeLedController();
         var bus = new MessageBus();
 
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
 
         Assert.Equal("LedWorker", worker.Name);
     }
@@ -52,7 +53,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
 
         worker.Start();
 
@@ -64,7 +65,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
 
         worker.Start();
 
@@ -76,7 +77,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         worker.Stop();
@@ -89,7 +90,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         worker.Stop();
@@ -103,7 +104,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         bus.Publish(new Message("led/flash", "3"));
@@ -118,7 +119,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         bus.Publish(new Message("led/flash", "1"));
@@ -133,7 +134,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         bus.Publish(new Message("led/flash", "0"));
@@ -147,7 +148,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         var ex = Record.Exception(() => bus.Publish(new Message("led/flash", "invalid")));
@@ -161,7 +162,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         bus.Publish(new Message("led/flash", "5"));
@@ -174,7 +175,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         bus.Publish(new Message("led/flash", "2"));
@@ -188,7 +189,7 @@ public class LedWorkerTests
     {
         var led = new FakeLedController();
         var bus = new MessageBus();
-        var worker = new LedWorker(led, bus);
+        var worker = new LedWorker(led, bus, new DeviceStatus());
         worker.Start();
 
         bus.Publish(new Message("wrong/topic", "5"));

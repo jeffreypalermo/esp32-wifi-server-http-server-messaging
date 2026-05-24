@@ -4,16 +4,24 @@
 .DESCRIPTION
     Restores packages, builds the solution, runs unit tests,
     optionally runs integration tests, and creates a deployment package.
+.PARAMETER Target
+    SoC target: esp32s3 (default) or esp32c3.
 .PARAMETER Integration
-    When specified, also runs integration tests against the ESP32-S3 device.
+    When specified, also runs integration tests against the device.
 #>
 param(
+    [ValidateSet("esp32s3", "esp32c3")]
+    [string]$Target = "esp32s3",
     [switch]$Integration
 )
 
 $ErrorActionPreference = "Stop"
 $script:ExitCode = 0
 $script:StepResults = @()
+
+$defineConstants = if ($Target -eq "esp32c3") { "ESP32_C3" } else { "" }
+$defineLabel    = if ($Target -eq "esp32c3") { "TRACE;ESP32_C3" } else { "TRACE" }
+Write-Host "Target SoC: $Target  (DefineConstants: $defineLabel)" -ForegroundColor Cyan
 
 function Write-StepHeader($message) {
     Write-Host ""
@@ -92,9 +100,9 @@ try {
 Write-StepHeader "Building nanoFramework Projects"
 
 try {
-    & $msbuildPath src\NanoFrameworkApp\NanoFrameworkApp.nfproj /p:Configuration=Release /restore:false /verbosity:minimal
+    & $msbuildPath src\NanoFrameworkApp\NanoFrameworkApp.nfproj /p:Configuration=Release /p:ExtraDefineConstants="$defineConstants" /restore:false /verbosity:minimal
     if ($LASTEXITCODE -ne 0) { throw "Main project build failed" }
-    & $msbuildPath src\NanoFrameworkApp.Tests\NanoFrameworkApp.Tests.nfproj /p:Configuration=Release /restore:false /verbosity:minimal
+    & $msbuildPath src\NanoFrameworkApp.Tests\NanoFrameworkApp.Tests.nfproj /p:Configuration=Release /p:ExtraDefineConstants="$defineConstants" /restore:false /verbosity:minimal
     if ($LASTEXITCODE -ne 0) { throw "Test project build failed" }
     Write-Success "nanoFramework projects built successfully"
     Record-Step "nanoFramework Build" $true

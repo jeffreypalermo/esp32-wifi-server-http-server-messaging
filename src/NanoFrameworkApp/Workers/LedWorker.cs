@@ -10,13 +10,15 @@ namespace NanoFrameworkApp.Workers
     {
         private readonly ILedController _ledController;
         private readonly MessageBus _messageBus;
+        private readonly DeviceStatus _deviceStatus;
         private bool _isRunning;
         private int _flashCount;
 
-        public LedWorker(ILedController ledController, MessageBus messageBus)
+        public LedWorker(ILedController ledController, MessageBus messageBus, DeviceStatus deviceStatus)
         {
             _ledController = ledController;
             _messageBus = messageBus;
+            _deviceStatus = deviceStatus;
         }
 
         public string Name => "LedWorker";
@@ -54,6 +56,8 @@ namespace NanoFrameworkApp.Workers
                     Thread.Sleep(200);
                     _flashCount++;
                 }
+
+                _deviceStatus.RecordFlashEvent(count);
             }
             catch (Exception ex)
             {
